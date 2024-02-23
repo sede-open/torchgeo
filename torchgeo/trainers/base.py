@@ -35,7 +35,9 @@ class BaseTask(LightningModule, ABC):
             ignore: Arguments to skip when saving hyperparameters.
         """
         super().__init__()
-        if isinstance(ignore, str):
+        if ignore is None:
+            ignore = ["ignore"]
+        elif isinstance(ignore, str):
             ignore = [ignore, "ignore"]
         else:
             ignore = list(ignore) + ["ignore"]
