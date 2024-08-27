@@ -96,6 +96,9 @@ class GeoDataset(Dataset[dict[str, Any]], abc.ABC):
     #: other datasets. It should not include a file extension, as the dataset may be in
     #: a different file format than what it was originally downloaded as.
     filename_glob = '*'
+    
+    # Whether to return the dataset as a Timeseries, this will add another dimension to the dataset
+    return_as_ts = False
 
     # NOTE: according to the Python docs:
     #

@@ -53,9 +53,11 @@ class GeoSampler(Sampler[BoundingBox], abc.ABC):
             (minx, maxx, miny, maxy, mint, maxt) coordinates to index a dataset
         """
 
-
 class RandomGeoSampler(GeoSampler):
-    """Samples elements from a region of interest randomly.
+    """Differs from TrochGeo's RandomGeoSampler in that it can sample SITS data.
+
+    Documentation from TorchGeo:
+    Samples elements from a region of interest randomly.
 
     This is particularly useful during training when you want to maximize the size of
     the dataset and return as many random :term:`chips <chip>` as possible. Note that
@@ -101,6 +103,7 @@ class RandomGeoSampler(GeoSampler):
         """
         super().__init__(dataset, roi)
         self.size = _to_tuple(size)
+        self.dataset = dataset
 
         if units == Units.PIXELS:
             self.size = (self.size[0] * self.res, self.size[1] * self.res)
@@ -139,8 +142,12 @@ class RandomGeoSampler(GeoSampler):
             # Choose a random tile, weighted by area
             idx = torch.multinomial(self.areas, 1)
             hit = self.hits[idx]
-            bounds = BoundingBox(*hit.bounds)
+            hit_bounds = hit.bounds
+            if self.dataset.return_as_ts:
+                hit_bounds[-2] = self.dataset.bounds.mint
+                hit_bounds[-1] = self.dataset.bounds.maxt
 
+            bounds = BoundingBox(*hit_bounds)
             # Choose a random index within that tile
             bounding_box = get_random_bounding_box(bounds, self.size, self.res)
 
