@@ -19,6 +19,31 @@ from shapely.geometry import box
 import re
 import pandas as pd
 import warnings
+import geopandas as gpd
+import numpy as np
+
+def load_file(path: str|GeoDataFrame) -> GeoDataFrame:
+    """
+    Load a file from the given path.
+
+    Parameters:
+    path (str or GeoDataFrame): The path to the file or a GeoDataFrame object.
+
+    Returns:
+    GeoDataFrame: The loaded file as a GeoDataFrame.
+
+    Raises:
+    None
+
+    """
+    if isinstance(path, GeoDataFrame):
+        return path
+    if path.endswith(".feather"):
+        print(f"Reading feather file: {path}")
+        return gpd.read_feather(path)
+    else:
+        print(f"Reading shapefile: {path}")
+        return gpd.read_file(path)
 
 def _get_regex_groups_as_df(dataset, hits):
     """
@@ -40,6 +65,8 @@ def _get_regex_groups_as_df(dataset, hits):
             match = re.match(filename_regex, str(hit.object))
             if match:
                 meta = match.groupdict()
+            else:
+                meta = {}
         else:
             meta = {}
         meta.update(
@@ -91,14 +118,13 @@ class GeoSampler(Sampler[BoundingBox], abc.ABC):
         """Determines the way to get the extend of the chips (samples) of the dataset.
         Should return a GeoDataFrame with the extend of the chips with the columns 
         geometry, minx, miny, maxx, maxy, mint, maxt, fid. Each row is a chip."""
-        raise NotImplementedError
 
 
     def filter_chips(
         self,
         filter_by: str | GeoDataFrame,
         predicate: str = "intersects",
-        action: str = "keep",
+        action: str = "keep" ,
     ) -> None:
         """Filter the default set of chips in the sampler down to a specific subset by
         specifying files supported by geopandas such as shapefiles, geodatabases or
@@ -112,9 +138,28 @@ class GeoSampler(Sampler[BoundingBox], abc.ABC):
         """
         prefilter_leng = len(self.chips)
         filtering_gdf = load_file(filter_by).to_crs(self.dataset.crs)
-        self.chips = filter_tiles(
-            self.chips, filtering_gdf, predicate, action
-        ).reset_index(drop=True)
+
+        if action == "keep":
+            self.chips = self.chips.iloc[
+                list(
+                    set(
+                        self.chips.sindex.query_bulk(
+                            filtering_gdf.geometry, predicate=predicate
+                        )[1]
+                    )
+                )
+            ].reset_index(drop=True)
+        elif action == "drop":
+            self.chips = self.chips.drop(
+                index=list(
+                    set(
+                        self.chips.sindex.query_bulk(
+                            filtering_gdf.geometry, predicate=predicate
+                        )[1]
+                    )
+                )
+            ).reset_index(drop=True)
+
         self.chips.fid = self.chips.index
         print(f"Filter step reduced chips from {prefilter_leng} to {len(self.chips)}")
         assert not self.chips.empty, "No chips left after filtering!"
@@ -160,7 +205,7 @@ class GeoSampler(Sampler[BoundingBox], abc.ABC):
         return len(self.chips)
 
 class RandomGeoSampler(GeoSampler):
-    """Differs from TrochGeo's RandomGeoSampler in that it can sample SITS data.
+    """Differs from TorchGeo's official RandomGeoSampler in that it can sample SITS data.
 
     Documentation from TorchGeo:
     Samples elements from a region of interest randomly.
@@ -266,14 +311,10 @@ class RandomGeoSampler(GeoSampler):
             }
             chips.append(chip)
         
-        if chips:
-            print("creating geodataframe... ")
-            chips_gdf = GeoDataFrame(chips, crs=self.dataset.crs)
-            chips_gdf["fid"] = chips_gdf.index
+        print("creating geodataframe... ")
+        chips_gdf = GeoDataFrame(chips, crs=self.dataset.crs)
+        chips_gdf["fid"] = chips_gdf.index
 
-        else:
-            warnings.warn("Sampler has no chips, check your inputs")
-            chips_gdf = GeoDataFrame()
         return chips_gdf
 
 
@@ -352,7 +393,7 @@ class GridGeoSampler(GeoSampler):
 
     def get_chips(self) -> GeoDataFrame:
         print("generating samples... ")
-        optional_keys = ["tile", "date"]
+        optional_keys = set(self.df_path.keys()) - set(['geometry', 'minx', 'maxx', 'miny', 'maxy', 'mint', 'maxt'])
         chips = []
         for _, row in tqdm(self.df_path.iterrows(), total=len(self.df_path)):
             bounds = BoundingBox(
@@ -459,12 +500,9 @@ class PreChippedGeoSampler(GeoSampler):
             }
             chips.append(chip)
 
-        if chips:
-            print("creating geodataframe... ")
-            chips_gdf = GeoDataFrame(chips, crs=self.dataset.crs)
-            chips_gdf["fid"] = chips_gdf.index
-        else:
-            warnings.warn("Sampler has no chips, check your inputs")
-            chips_gdf = GeoDataFrame()
+        print("creating geodataframe... ")
+        chips_gdf = GeoDataFrame(chips, crs=self.dataset.crs)
+        chips_gdf["fid"] = chips_gdf.index
+
         return chips_gdf
 
