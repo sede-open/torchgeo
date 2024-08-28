@@ -20,14 +20,29 @@ from torchgeo.samplers import (
     tile_to_chips,
 )
 
+from geopandas import GeoDataFrame
+from shapely.geometry import box
+
 
 class CustomGeoSampler(GeoSampler):
     def __init__(self) -> None:
-        pass
+        self.chips = self.get_chips()
 
-    def __iter__(self) -> Iterator[BoundingBox]:
+    def get_chips(self) -> GeoDataFrame:
+        chips = []
         for i in range(len(self)):
-            yield BoundingBox(i, i, i, i, i, i)
+            chips.append(
+                {
+                "geometry": box(i, i, i, i),
+                "minx": i,
+                "miny": i,
+                "maxx": i,
+                "maxy": i,
+                "mint": i,
+                "maxt": i,
+                }
+            )
+        return GeoDataFrame(chips, crs="3005")
 
     def __len__(self) -> int:
         return 2
@@ -156,7 +171,7 @@ class TestGridGeoSampler:
     def dataset(self) -> CustomGeoDataset:
         ds = CustomGeoDataset()
         ds.index.insert(0, (0, 100, 200, 300, 400, 500))
-        ds.index.insert(1, (0, 100, 200, 300, 400, 500))
+        ds.index.insert(1, (0, 100, 200, 300, 500, 600))
         return ds
 
     @pytest.fixture(
@@ -197,13 +212,16 @@ class TestGridGeoSampler:
 
             assert math.isclose(query.maxx - query.minx, sampler.size[1])
             assert math.isclose(query.maxy - query.miny, sampler.size[0])
-            assert math.isclose(
-                query.maxt - query.mint, sampler.roi.maxt - sampler.roi.mint
+            assert (
+                sampler.roi.mint
+                <= query.mint
+                <= query.maxt
+                <= sampler.roi.maxt
             )
 
     def test_len(self, sampler: GridGeoSampler) -> None:
         rows, cols = tile_to_chips(sampler.roi, sampler.size, sampler.stride)
-        length = rows * cols * 2  # two items in dataset
+        length = rows * cols * 2 # two spatially but not temporally overlapping items in dataset
         assert len(sampler) == length
 
     def test_roi(self, dataset: CustomGeoDataset) -> None:

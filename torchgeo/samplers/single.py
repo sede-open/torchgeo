@@ -18,6 +18,7 @@ from tqdm import tqdm
 from shapely.geometry import box
 import re
 import pandas as pd
+import warnings
 
 def _get_regex_groups_as_df(dataset, hits):
     """
@@ -86,7 +87,7 @@ class GeoSampler(Sampler[BoundingBox], abc.ABC):
         self.dataset = dataset
     
     @abc.abstractmethod    
-    def get_chips(self) -> GeoDataFrame:
+    def get_chips(self, **kwargs) -> GeoDataFrame:
         """Determines the way to get the extend of the chips (samples) of the dataset.
         Should return a GeoDataFrame with the extend of the chips with the columns 
         geometry, minx, miny, maxx, maxy, mint, maxt, fid. Each row is a chip."""
@@ -212,7 +213,7 @@ class RandomGeoSampler(GeoSampler):
         if units == Units.PIXELS:
             self.size = (self.size[0] * self.res, self.size[1] * self.res)
 
-        self.length = 0
+        num_chips = 0
         self.hits = []
         areas = []
         for hit in self.index.intersection(tuple(self.roi), objects=True):
@@ -223,25 +224,25 @@ class RandomGeoSampler(GeoSampler):
             ):
                 if bounds.area > 0:
                     rows, cols = tile_to_chips(bounds, self.size)
-                    self.length += rows * cols
+                    num_chips += rows * cols
                 else:
-                    self.length += 1
+                    num_chips += 1
                 self.hits.append(hit)
                 areas.append(bounds.area)
         if length is not None:
-            self.length = length
+            num_chips = length
+        self.length = num_chips
 
         # torch.multinomial requires float probabilities > 0
         self.areas = torch.tensor(areas, dtype=torch.float)
         if torch.sum(self.areas) == 0:
             self.areas += 1
 
-        self.chips = self.get_chips()
-        
+        self.chips = self.get_chips(num_samples=num_chips)
 
-    def get_chips(self) -> GeoDataFrame:
+    def get_chips(self, num_samples) -> GeoDataFrame:
         chips = []
-        for _ in tqdm(range(len(self))):
+        for _ in tqdm(range(num_samples)):
             # Choose a random tile, weighted by area
             idx = torch.multinomial(self.areas, 1)
             hit = self.hits[idx]
@@ -274,14 +275,6 @@ class RandomGeoSampler(GeoSampler):
             warnings.warn("Sampler has no chips, check your inputs")
             chips_gdf = GeoDataFrame()
         return chips_gdf
-
-    def __len__(self) -> int:
-        """Return the number of samples in a single epoch.
-
-        Returns:
-            length of the epoch
-        """
-        return self.length
 
 
 class GridGeoSampler(GeoSampler):
@@ -360,7 +353,6 @@ class GridGeoSampler(GeoSampler):
     def get_chips(self) -> GeoDataFrame:
         print("generating samples... ")
         optional_keys = ["tile", "date"]
-        self.length = 0
         chips = []
         for _, row in tqdm(self.df_path.iterrows(), total=len(self.df_path)):
             bounds = BoundingBox(
@@ -443,9 +435,9 @@ class PreChippedGeoSampler(GeoSampler):
 
         self.hits = []
         for hit in self.index.intersection(tuple(self.roi), objects=True):
-            self.hits.append(hit)\
+            self.hits.append(hit)
         
-        self.chips = get_chips(self)
+        self.chips = self.get_chips()
 
     def get_chips(self) -> GeoDataFrame:
 
@@ -454,7 +446,7 @@ class PreChippedGeoSampler(GeoSampler):
             generator = torch.randperm
 
         chips = []
-        for idx in generator(len(self)):
+        for idx in generator(len(self.hits)):
             minx, maxx, miny, maxy, mint, maxt = self.hits[idx].bounds
             chip = {
                 "geometry": box(minx, miny, maxx, maxy),
