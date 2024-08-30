@@ -98,6 +98,9 @@ class GeoDataset(Dataset[dict[str, Any]], abc.ABC):
     #: a different file format than what it was originally downloaded as.
     filename_glob = '*'
 
+    # Whether to return the dataset as a Timeseries, this will add another dimension to the dataset
+    return_as_ts = False
+
     # NOTE: according to the Python docs:
     #
     # * https://docs.python.org/3/library/exceptions.html#NotImplementedError
@@ -983,6 +986,7 @@ class IntersectionDataset(GeoDataset):
             if not isinstance(ds, GeoDataset):
                 raise ValueError('IntersectionDataset only supports GeoDatasets')
 
+        self.return_as_ts = dataset1.return_as_ts or dataset2.return_as_ts
         self.crs = dataset1.crs
         self.res = dataset1.res
 
@@ -1143,6 +1147,7 @@ class UnionDataset(GeoDataset):
             if not isinstance(ds, GeoDataset):
                 raise ValueError('UnionDataset only supports GeoDatasets')
 
+        self.return_as_ts = dataset1.return_as_ts and dataset2.return_as_ts
         self.crs = dataset1.crs
         self.res = dataset1.res
 
