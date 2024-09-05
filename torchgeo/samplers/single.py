@@ -106,10 +106,17 @@ class GeoSampler(Sampler[BoundingBox], abc.ABC):
             roi = BoundingBox(*self.index.bounds)
         else:
             self.index = Index(interleaved=False, properties=Property(dimension=3))
-            hits = dataset.index.intersection(tuple(roi), objects=True)
-            for hit in hits:
-                bbox = BoundingBox(*hit.bounds) & roi
-                self.index.insert(hit.id, tuple(bbox), hit.object)
+            if isinstance(roi, list):
+                for area in roi:
+                    hits = dataset.index.intersection(tuple(area), objects=True)
+                    for hit in hits:
+                        bbox = BoundingBox(*hit.bounds) & area
+                        self.index.insert(hit.id, tuple(bbox), hit.object)
+            else:
+                hits = dataset.index.intersection(tuple(roi), objects=True)
+                for hit in hits:
+                    bbox = BoundingBox(*hit.bounds) & roi
+                    self.index.insert(hit.id, tuple(bbox), hit.object)
 
         self.res = dataset.res
         self.roi = roi
@@ -262,22 +269,47 @@ class RandomGeoSampler(GeoSampler):
         num_chips = 0
         self.hits = []
         areas = []
-        for hit in self.index.intersection(tuple(self.roi), objects=True):
-            bounds = BoundingBox(*hit.bounds)
-            if (
-                bounds.maxx - bounds.minx >= self.size[1]
-                and bounds.maxy - bounds.miny >= self.size[0]
-            ):
-                if bounds.area > 0:
-                    rows, cols = tile_to_chips(bounds, self.size)
-                    num_chips += rows * cols
-                else:
-                    num_chips += 1
-                self.hits.append(hit)
-                areas.append(bounds.area)
+        # use only geospatial bounds for filering in case return_as_ts is set to True
+        filter_indices = slice(0,4) if dataset.return_as_ts else slice(0,6)
+
+        if isinstance(self.roi, list):
+            for area in self.roi:
+                for hit in self.index.intersection(tuple(area), objects=True):
+                    # Filter out hits in the index that share the same extent
+                    if  hit.bounds[filter_indices] not in [ht.bounds[filter_indices] for ht in self.hits]:
+                        bounds = BoundingBox(*hit.bounds)
+                        if (
+                            bounds.maxx - bounds.minx >= self.size[1]
+                            and bounds.maxy - bounds.miny >= self.size[0]
+                        ):
+                            if bounds.area > 0:
+                                rows, cols = tile_to_chips(bounds, self.size)
+                                num_chips += rows * cols
+                            else:
+                                num_chips += 1
+                            self.hits.append(hit)
+                            areas.append(bounds.area)
+        else:
+            for hit in self.index.intersection(tuple(self.roi), objects=True):
+                # Filter out hits in the index that share the same extent
+                if  hit.bounds[filter_indices] not in [ht.bounds[filter_indices] for ht in self.hits]:
+                    bounds = BoundingBox(*hit.bounds)
+                    if (
+                        bounds.maxx - bounds.minx >= self.size[1]
+                        and bounds.maxy - bounds.miny >= self.size[0]
+                    ):
+                        if bounds.area > 0:
+                            rows, cols = tile_to_chips(bounds, self.size)
+                            num_chips += rows * cols
+                        else:
+                            num_chips += 1
+                        self.hits.append(hit)
+                        areas.append(bounds.area)
         if length is not None:
             num_chips = length
         self.length = num_chips
+
+        print(f"Unique geospatial file hits: {len(self.hits)}")
 
         # torch.multinomial requires float probabilities > 0
         self.areas = torch.tensor(areas, dtype=torch.float)
@@ -309,6 +341,7 @@ class RandomGeoSampler(GeoSampler):
                 'maxy': maxy,
                 'mint': mint,
                 'maxt': maxt,
+                'hit_id': hit.id
             }
             chips.append(chip)
 
