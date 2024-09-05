@@ -191,6 +191,30 @@ class GeoSampler(Sampler[BoundingBox], abc.ABC):
             self.chips.to_feather(path)
         else:
             self.chips.to_file(path, driver=driver)
+    
+    def save_hits(self, path: str, driver: str) -> None:
+        """Save the hits as a shapefile or feather file"""
+        bounds = []
+        for hit in self.hits:
+            bbox = BoundingBox(*hit.bounds)
+            minx, maxx, miny, maxy, mint, maxt  = tuple(bbox)
+            bound = {
+                'geometry': box(minx, miny, maxx, maxy),
+                'minx': minx,
+                'miny': miny,
+                'maxx': maxx,
+                'maxy': maxy,
+                'mint': mint,
+                'maxt': maxt,
+                'hit_id': hit.id
+            }
+            bounds.append(bound)
+        
+        bounds_gdf = GeoDataFrame(bounds, crs=self.dataset.crs)
+        if path.endswith('.feather'):
+            bounds_gdf.to_feather(path)
+        else:
+            bounds_gdf.to_file(path, driver=driver)
 
     def __iter__(self) -> Iterator[BoundingBox]:
         """Return the index of a dataset.
