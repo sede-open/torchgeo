@@ -4,6 +4,7 @@
 """TorchGeo samplers."""
 
 import abc
+import random
 import re
 import warnings
 from collections.abc import Callable, Iterable, Iterator
@@ -105,19 +106,36 @@ class GeoSampler(Sampler[BoundingBox], abc.ABC):
             self.index = dataset.index
             roi = BoundingBox(*self.index.bounds)
         else:
+            # Only keep hits unique in the spatial dimension if return_as_ts is enabled
+            # else keep hits that are unique in both spatial and temporal dimensions
+            filter_indices = slice(0, 4) if dataset.return_as_ts else slice(0, 6)
+
             self.index = Index(interleaved=False, properties=Property(dimension=3))
             if isinstance(roi, list):
                 for area in roi:
                     hits = dataset.index.intersection(tuple(area), objects=True)
                     for hit in hits:
                         bbox = BoundingBox(*hit.bounds) & area
-                        self.index.insert(hit.id, tuple(bbox), hit.object)
+                        # Filter hits
+                        if tuple(bbox)[filter_indices] not in [
+                            tuple(item.bounds[filter_indices])
+                            for item in list(
+                                self.index.intersection(tuple(area), objects=True)
+                            )
+                        ]:
+                            self.index.insert(hit.id, tuple(bbox), hit.object)
             else:
                 hits = dataset.index.intersection(tuple(roi), objects=True)
                 for hit in hits:
                     bbox = BoundingBox(*hit.bounds) & roi
-                    self.index.insert(hit.id, tuple(bbox), hit.object)
+                    # Filter hits
+                    if tuple(bbox)[filter_indices] not in [
+                        tuple(item.bounds[filter_indices])
+                        for item in list(self.index.intersection(tuple(roi), objects=True))
+                    ]:
+                        self.index.insert(hit.id, tuple(bbox), hit.object)
 
+        print(f"Index Size: {self.index.get_size()}")
         self.res = dataset.res
         self.roi = roi
         self.dataset = dataset
@@ -185,14 +203,14 @@ class GeoSampler(Sampler[BoundingBox], abc.ABC):
         """
         self.chips = np.array_split(self.chips, total_workers)[worker_num]
 
-    def save(self, path: str, driver: str) -> None:
+    def save(self, path: str, driver: str = "Shapefile") -> None:
         """Save the chips as a shapefile or feather file"""
         if path.endswith('.feather'):
             self.chips.to_feather(path)
         else:
             self.chips.to_file(path, driver=driver)
-    
-    def save_hits(self, path: str, driver: str) -> None:
+
+    def save_hits(self, path: str, driver: str = "Shapefile") -> None:
         """Save the hits as a shapefile or feather file"""
         bounds = []
         for hit in self.hits:
@@ -209,7 +227,7 @@ class GeoSampler(Sampler[BoundingBox], abc.ABC):
                 'hit_id': hit.id
             }
             bounds.append(bound)
-        
+
         bounds_gdf = GeoDataFrame(bounds, crs=self.dataset.crs)
         if path.endswith('.feather'):
             bounds_gdf.to_feather(path)
@@ -341,37 +359,58 @@ class RandomGeoSampler(GeoSampler):
             self.areas += 1
 
         self.chips = self.get_chips(num_samples=num_chips)
-
+    
     def get_chips(self, num_samples) -> GeoDataFrame:
         chips = []
-        for _ in tqdm(range(num_samples)):
-            # Choose a random tile, weighted by area
-            idx = torch.multinomial(self.areas, 1)
-            hit = self.hits[idx]
-            hit_bounds = hit.bounds
-            if self.dataset.return_as_ts:
-                hit_bounds[-2] = self.dataset.bounds.mint
-                hit_bounds[-1] = self.dataset.bounds.maxt
+        while len(chips) < num_samples:
+            if isinstance(self.roi, list):
+                # Choose a random ROI, weighted by area
+                idx = torch.multinomial(torch.tensor([roi.area for roi in self.roi], dtype=torch.float), 1)
+                roi = self.roi[idx]
+            else:
+                roi = self.roi
 
-            bounds = BoundingBox(*hit_bounds)
-            # Choose a random index within that tile
-            bbox = get_random_bounding_box(bounds, self.size, self.res)
+            # Choose a random bounding box within the ROI
+            bbox = get_random_bounding_box(roi, self.size, self.res)
             minx, maxx, miny, maxy, mint, maxt = tuple(bbox)
-            chip = {
-                'geometry': box(minx, miny, maxx, maxy),
-                'minx': minx,
-                'miny': miny,
-                'maxx': maxx,
-                'maxy': maxy,
-                'mint': mint,
-                'maxt': maxt,
-                'hit_id': hit.id
-            }
-            chips.append(chip)
 
+            # Find file hits in the index for chosen bounding box
+            hits = [hit for hit in list(self.index.intersection(tuple(roi), objects=True)) if BoundingBox(*hit.bounds).area > 0]
+
+            # if the bounding box has no file hit, dont include it in the samples
+            if len(hits) == 0:
+                continue
+            else:
+                # Choose a random hit
+                hit = random.choice(hits)
+
+                # in case we are randomly sampling also the temporal dimension, get
+                # mint, maxt from the randomly chosen hit
+                if self.dataset.return_as_ts:
+                    mint = self.dataset.bounds.mint
+                    maxt = self.dataset.bounds.maxt
+                else:
+                    mint = hit.bounds[-2]
+                    maxt = hit.bounds[-1]
+                
+                chip = {
+                    'geometry': box(minx, miny, maxx, maxy),
+                    'minx': minx,
+                    'miny': miny,
+                    'maxx': maxx,
+                    'maxy': maxy,
+                    'mint': mint,
+                    'maxt': maxt,
+                    'hit_id': hit.id
+                }
+                chips.append(chip)
+        
         print('creating geodataframe... ')
         chips_gdf = GeoDataFrame(chips, crs=self.dataset.crs)
         chips_gdf['fid'] = chips_gdf.index
+
+        print("Number of Unique Hit IDs: {}".format(chips_gdf["hit_id"].unique().shape[0]))
+        print("Number of Unique Timestamps: {}".format(chips_gdf["mint"].unique().shape[0]))
 
         return chips_gdf
 
@@ -490,7 +529,7 @@ class GridGeoSampler(GeoSampler):
                         if key in row.keys():
                             chip[key] = row[key]
 
-                    chips.append(chip)
+                    chips.append(chip)           
 
         if chips:
             print('creating geodataframe... ')
