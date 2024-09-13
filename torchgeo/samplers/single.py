@@ -240,7 +240,12 @@ class GeoSampler(Sampler[BoundingBox], abc.ABC):
         Returns:
             (minx, maxx, miny, maxy, mint, maxt) coordinates to index a dataset
         """
+        # sort chips based on hit_id
+        self.chips = self.chips.sort_values(by=['hit_id'])
+
         for _, chip in self.chips.iterrows():
+            print("------------------------------------")
+            print("Chip FID: {}".format(chip["fid"]))
             yield BoundingBox(
                 chip.minx, chip.maxx, chip.miny, chip.maxy, chip.mint, chip.maxt
             )
