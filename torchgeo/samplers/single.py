@@ -145,11 +145,8 @@ class RandomGeoSampler(GeoSampler):
             if self.dataset.return_as_ts:
                 mint = self.dataset.bounds.mint
                 maxt = self.dataset.bounds.maxt
-            else:
-                mint = bounds.mint
-                maxt = bounds.maxt
-            bounds[-2] = mint
-            bounds[-1] = maxt
+                bounds[-2] = mint
+                bounds[-1] = maxt
 
             bounds = BoundingBox(*bounds)
 
