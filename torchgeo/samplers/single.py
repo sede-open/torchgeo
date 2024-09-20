@@ -143,8 +143,8 @@ class RandomGeoSampler(GeoSampler):
 
             bounds = hit.bounds
             if self.dataset.return_as_ts:
-                mint = self.dataset.bounds.mint
-                maxt = self.dataset.bounds.maxt
+                mint = self.index.bounds.mint
+                maxt = self.index.bounds.maxt
                 bounds[-2] = mint
                 bounds[-1] = maxt
 
@@ -242,8 +242,8 @@ class GridGeoSampler(GeoSampler):
             rows, cols = tile_to_chips(bounds, self.size, self.stride)
 
             if self.dataset.return_as_ts:
-                mint = self.dataset.bounds.mint
-                maxt = self.dataset.bounds.maxt
+                mint = self.index.bounds.mint
+                maxt = self.index.bounds.maxt
             else:
                 mint = bounds.mint
                 maxt = bounds.maxt
@@ -317,8 +317,8 @@ class PreChippedGeoSampler(GeoSampler):
             bounding_box = self.hits[idx].bounds
 
             if self.dataset.return_as_ts:
-                mint = self.dataset.bounds.mint
-                maxt = self.dataset.bounds.maxt
+                mint = self.index.bounds.mint
+                maxt = self.index.bounds.maxt
             else:
                 mint = bounding_box.mint
                 maxt = bounding_box.maxt
