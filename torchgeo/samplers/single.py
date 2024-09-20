@@ -140,20 +140,21 @@ class RandomGeoSampler(GeoSampler):
             # Choose a random tile, weighted by area
             idx = torch.multinomial(self.areas, 1)
             hit = self.hits[idx]
-            bounds = BoundingBox(*hit.bounds)
 
-            # Choose a random index within that tile
-            bounding_box = get_random_bounding_box(bounds, self.size, self.res)
-
+            bounds = hit.bounds
             if self.dataset.return_as_ts:
                 mint = self.dataset.bounds.mint
                 maxt = self.dataset.bounds.maxt
             else:
                 mint = bounds.mint
                 maxt = bounds.maxt
+            bounds[-2] = mint
+            bounds[-1] = maxt
 
-            bounding_box.mint = mint
-            bounding_box.maxt = maxt
+            bounds = BoundingBox(*bounds)
+
+            # Choose a random index within that tile
+            bounding_box = get_random_bounding_box(bounds, self.size, self.res)
 
             yield bounding_box
 
@@ -325,8 +326,8 @@ class PreChippedGeoSampler(GeoSampler):
                 mint = bounding_box.mint
                 maxt = bounding_box.maxt
 
-            bounding_box.mint = mint
-            bounding_box.maxt = maxt
+            bounding_box[-2] = mint
+            bounding_box[-1] = maxt
             yield BoundingBox(*bounding_box)
 
     def __len__(self) -> int:
