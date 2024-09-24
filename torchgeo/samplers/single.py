@@ -62,6 +62,7 @@ class GeoSampler(Sampler[BoundingBox], abc.ABC):
             roi: region of interest to sample from (minx, maxx, miny, maxy, mint, maxt)
                 (defaults to the bounds of ``dataset.index``)
         """
+        self.dataset = dataset
         if roi is None:
             self.index = dataset.index
             roi = BoundingBox(*self.index.bounds)
@@ -309,7 +310,15 @@ class RandomGeoSampler(GeoSampler):
             # Choose a random tile, weighted by area
             idx = torch.multinomial(self.areas, 1)
             hit = self.hits[idx]
-            bounds = BoundingBox(*hit.bounds)
+
+            bounds = hit.bounds
+            if self.dataset.return_as_ts:
+                mint = self.index.bounds.mint
+                maxt = self.index.bounds.maxt
+                bounds[-2] = mint
+                bounds[-1] = maxt
+
+            bounds = BoundingBox(*bounds)
 
             # Choose a random index within that tile
             bbox = get_random_bounding_box(bounds, self.size, self.res, self.generator)
@@ -409,6 +418,13 @@ class GridGeoSampler(GeoSampler):
             bounds = BoundingBox(*hit.bounds)
             rows, cols = tile_to_chips(bounds, self.size, self.stride)
 
+            if self.dataset.return_as_ts:
+                mint = self.index.bounds.mint
+                maxt = self.index.bounds.maxt
+            else:
+                mint = bounds.mint
+                maxt = bounds.maxt
+
             # For each row...
             for i in range(rows):
                 miny = bounds.miny + i * self.stride[0]
@@ -425,8 +441,8 @@ class GridGeoSampler(GeoSampler):
                         'miny': miny,
                         'maxx': maxx,
                         'maxy': maxy,
-                        'mint': bounds.mint,
-                        'maxt': bounds.maxt,
+                        'mint': mint,
+                        'maxt': maxt,
                     }
                     self.length += 1
                     chips.append(chip)
@@ -501,6 +517,9 @@ class PreChippedGeoSampler(GeoSampler):
         chips = []
         for idx in generator(self.length):
             minx, maxx, miny, maxy, mint, maxt = self.hits[idx].bounds
+            if self.dataset.return_as_ts:
+                mint = self.index.bounds.mint
+                maxt = self.index.bounds.maxt
             chip = {
                 'geometry': box(minx, miny, maxx, maxy),
                 'minx': minx,

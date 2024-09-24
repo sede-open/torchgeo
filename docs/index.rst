@@ -31,6 +31,7 @@ torchgeo
    tutorials/getting_started
    tutorials/visualizing_samples
    tutorials/custom_raster_dataset
+   tutorials/sits_dataset
    tutorials/transforms
    tutorials/indices
    tutorials/trainers
