@@ -313,10 +313,8 @@ class RandomGeoSampler(GeoSampler):
 
             bounds = hit.bounds
             if self.dataset.return_as_ts:
-                mint = self.index.bounds.mint
-                maxt = self.index.bounds.maxt
-                bounds[-2] = mint
-                bounds[-1] = maxt
+                bounds[-2] = self.index.bounds[-2]
+                bounds[-1] = self.index.bounds[-1]
 
             bounds = BoundingBox(*bounds)
 
