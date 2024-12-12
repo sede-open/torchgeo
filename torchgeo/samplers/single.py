@@ -4,6 +4,8 @@
 """TorchGeo samplers."""
 
 import abc
+import multiprocessing as mp
+import warnings
 from collections.abc import Callable, Iterable, Iterator
 from functools import partial
 
@@ -403,53 +405,72 @@ class GridGeoSampler(GeoSampler):
 
         self.chips = self.get_chips()
 
-    def get_chips(self) -> GeoDataFrame:
-        """Generates chips from the given hits.
+    def generate_chip(self, i, j, bounds, optional_dict):
+        minx = bounds.minx + j * self.stride[1]
+        maxx = minx + self.size[1]
 
-        Returns:
-            A GeoDataFrame containing the generated chips.
-        """
+        miny = bounds.miny + i * self.stride[0]
+        maxy = miny + self.size[0]
+
+        if self.dataset.return_as_ts:
+            mint = self.dataset.bounds.mint
+            maxt = self.dataset.bounds.maxt
+        else:
+            mint = bounds.mint
+            maxt = bounds.maxt
+
+        chip = {
+            'geometry': box(minx, miny, maxx, maxy),
+            'minx': minx,
+            'miny': miny,
+            'maxx': maxx,
+            'maxy': maxy,
+            'mint': mint,
+            'maxt': maxt,
+        }
+        chip.update(optional_dict)
+        return chip
+
+    def get_chips(self) -> GeoDataFrame:
         print('generating samples... ')
-        self.length = 0
+        optional_keys = set(self.df_path.keys()) - set(
+            ['geometry', 'minx', 'maxx', 'miny', 'maxy', 'mint', 'maxt']
+        )
         chips = []
-        for hit in self.hits:
-            bounds = BoundingBox(*hit.bounds)
+        for _, row in tqdm(self.df_path.iterrows(), total=len(self.df_path)):
+            bounds = BoundingBox(
+                row.minx, row.maxx, row.miny, row.maxy, row.mint, row.maxt
+            )
             rows, cols = tile_to_chips(bounds, self.size, self.stride)
 
-            if self.dataset.return_as_ts:
-                mint = self.index.bounds[-2]
-                maxt = self.index.bounds[-1]
-            else:
-                mint = bounds.mint
-                maxt = bounds.maxt
+            optional_dict = {}
+            for key in optional_keys:
+                if key in row.keys():
+                    optional_dict[key] = row[key]
 
-            # For each row...
-            for i in range(rows):
-                miny = bounds.miny + i * self.stride[0]
-                maxy = miny + self.size[0]
-
-                # For each column...
-                for j in range(cols):
-                    minx = bounds.minx + j * self.stride[1]
-                    maxx = minx + self.size[1]
-
-                    chip = {
-                        'geometry': box(minx, miny, maxx, maxy),
-                        'minx': minx,
-                        'miny': miny,
-                        'maxx': maxx,
-                        'maxy': maxy,
-                        'mint': mint,
-                        'maxt': maxt,
-                    }
-                    self.length += 1
-                    chips.append(chip)
+            with mp.Pool(mp.cpu_count()) as pool:
+                chips.extend(
+                    list(
+                        pool.starmap(
+                            self.generate_chip,
+                            tqdm(
+                                [
+                                    (i, j, bounds, optional_dict)
+                                    for i in range(rows)
+                                    for j in range(cols)
+                                ]
+                            ),
+                        )
+                    )
+                )
 
         if chips:
+            print('creating geodataframe... ')
             chips_gdf = GeoDataFrame(chips, crs=self.dataset.crs)
             chips_gdf['fid'] = chips_gdf.index
 
         else:
+            warnings.warn('Sampler has no chips, check your inputs')
             chips_gdf = GeoDataFrame()
         return chips_gdf
 
