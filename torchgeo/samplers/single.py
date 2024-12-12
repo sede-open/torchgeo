@@ -22,7 +22,8 @@ from tqdm import tqdm
 from ..datasets import BoundingBox, GeoDataset
 from .constants import Units
 from .utils import _to_tuple, get_random_bounding_box, tile_to_chips
-
+import pandas as pd
+import re
 
 def load_file(path: str | GeoDataFrame) -> GeoDataFrame:
     """Load a file from the given path.
@@ -46,6 +47,43 @@ def load_file(path: str | GeoDataFrame) -> GeoDataFrame:
         print(f'Reading shapefile: {path}')
         return gpd.read_file(path)
 
+
+
+def _get_regex_groups_as_df(dataset: GeoDataset, hits: list) -> pd.DataFrame:
+    """Extracts the regex metadata from a list of hits.
+
+    Args:
+        dataset (GeoDataset): The dataset to sample from.
+        hits (list): A list of hits.
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the extracted file metadata.
+    """
+    has_filename_regex = hasattr(dataset, 'filename_regex')
+    if has_filename_regex:
+        filename_regex = re.compile(dataset.filename_regex, re.VERBOSE)
+    file_metadata = []
+    for hit in hits:
+        if has_filename_regex:
+            match = re.match(filename_regex, str(hit.object))
+            if match:
+                meta = match.groupdict()
+            else:
+                meta = {}
+        else:
+            meta = {}
+        meta.update(
+            {
+                'minx': hit.bounds[0],
+                'maxx': hit.bounds[1],
+                'miny': hit.bounds[2],
+                'maxy': hit.bounds[3],
+                'mint': hit.bounds[4],
+                'maxt': hit.bounds[5],
+            }
+        )
+        file_metadata.append(meta)
+    return pd.DataFrame(file_metadata)
 
 class GeoSampler(Sampler[BoundingBox], abc.ABC):
     """Abstract base class for sampling from :class:`~torchgeo.datasets.GeoDataset`.
@@ -394,14 +432,24 @@ class GridGeoSampler(GeoSampler):
             self.size = (self.size[0] * self.res, self.size[1] * self.res)
             self.stride = (self.stride[0] * self.res, self.stride[1] * self.res)
 
-        self.hits = []
-        for hit in self.index.intersection(tuple(self.roi), objects=True):
-            bounds = BoundingBox(*hit.bounds)
-            if (
-                bounds.maxx - bounds.minx >= self.size[1]
-                and bounds.maxy - bounds.miny >= self.size[0]
-            ):
-                self.hits.append(hit)
+        hits = self.index.intersection(tuple(self.roi), objects=True)
+        df_path = _get_regex_groups_as_df(self.dataset, hits)
+
+        # Filter out tiles smaller than the chip size
+        self.df_path = df_path[
+            (df_path.maxx - df_path.minx >= self.size[1])
+            & (df_path.maxy - df_path.miny >= self.size[0])
+        ]
+
+        # Filter out hits in the index that share the same extent
+        if self.dataset.return_as_ts:
+            self.df_path.drop_duplicates(
+                subset=['minx', 'maxx', 'miny', 'maxy'], inplace=True
+            )
+        else:
+            self.df_path.drop_duplicates(
+                subset=['minx', 'maxx', 'miny', 'maxy', 'mint', 'maxt'], inplace=True
+            )
 
         self.chips = self.get_chips()
 
