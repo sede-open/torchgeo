@@ -417,8 +417,8 @@ class GridGeoSampler(GeoSampler):
             rows, cols = tile_to_chips(bounds, self.size, self.stride)
 
             if self.dataset.return_as_ts:
-                mint = self.index.bounds.mint
-                maxt = self.index.bounds.maxt
+                mint = self.index.bounds[-2]
+                maxt = self.index.bounds[-1]
             else:
                 mint = bounds.mint
                 maxt = bounds.maxt
@@ -516,8 +516,8 @@ class PreChippedGeoSampler(GeoSampler):
         for idx in generator(self.length):
             minx, maxx, miny, maxy, mint, maxt = self.hits[idx].bounds
             if self.dataset.return_as_ts:
-                mint = self.index.bounds.mint
-                maxt = self.index.bounds.maxt
+                mint = self.index.bounds[-2]
+                maxt = self.index.bounds[-1]
             chip = {
                 'geometry': box(minx, miny, maxx, maxy),
                 'minx': minx,
