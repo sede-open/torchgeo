@@ -490,33 +490,106 @@ class GridGeoSampler(GeoSampler):
                 row.minx, row.maxx, row.miny, row.maxy, row.mint, row.maxt
             )
             rows, cols = tile_to_chips(bounds, self.size, self.stride)
-
             optional_dict = {}
             for key in optional_keys:
                 if key in row.keys():
                     optional_dict[key] = row[key]
-
-            with mp.Pool(mp.cpu_count()) as pool:
-                chips.extend(
-                    list(
-                        pool.starmap(
-                            self.generate_chip,
-                            tqdm(
-                                [
-                                    (i, j, bounds, optional_dict)
-                                    for i in range(rows)
-                                    for j in range(cols)
-                                ]
-                            ),
-                        )
-                    )
-                )
-
+            for i in range(rows):
+                for j in range(cols):
+                    chip = self.generate_chip(i, j, bounds, optional_dict)
+                    chips.append(chip)
         if chips:
             print('creating geodataframe... ')
             chips_gdf = GeoDataFrame(chips, crs=self.dataset.crs)
             chips_gdf['fid'] = chips_gdf.index
+        else:
+            warnings.warn('Sampler has no chips, check your inputs')
+            chips_gdf = GeoDataFrame()
+        return chips_gdf
 
+def get_chips_for_row(row, roi, stride, size, cols):
+    worker_chips = []
+    for j in range(cols):
+        minx = roi.minx + j * stride[1]
+        maxx = minx + size[1]
+        miny = roi.miny + row * stride[0]
+        maxy = miny + size[0]
+        mint = roi.mint
+        maxt = roi.maxt
+        chip = {
+            'geometry': box(minx, miny, maxx, maxy),
+            'minx': minx,
+            'miny': miny,
+            'maxx': maxx,
+            'maxy': maxy,
+            'mint': mint,
+            'maxt': maxt,
+        }
+        worker_chips.append(chip)
+    return worker_chips
+
+class ROIGridSampler(GeoSampler):
+    """ Samples elements in a grid-like fashion within a region of interest.
+
+    Differs from normal gridsampler in that it does not produce overlapping chips.
+    """
+
+    def __init__(
+        self,
+        dataset: GeoDataset,
+        size: tuple[float, float] | float,
+        stride: tuple[float, float] | float,
+        roi: BoundingBox | None = None,
+        units: Units = Units.PIXELS,
+    ) -> None:
+        """Initialize a new Sampler instance.
+
+        The ``size`` and ``stride`` arguments can either be:
+
+        * a single ``float`` - in which case the same value is used for the height and
+          width dimension
+        * a ``tuple`` of two floats - in which case, the first *float* is used for the
+          height dimension, and the second *float* for the width dimension
+
+        .. versionchanged:: 0.3
+           Added ``units`` parameter, changed default to pixel units
+
+        Args:
+            dataset: dataset to index from
+            size: dimensions of each :term:`patch`
+            stride: distance to skip between each patch
+            roi: region of interest to sample from (minx, maxx, miny, maxy, mint, maxt)
+                (defaults to the bounds of ``dataset.index``)
+            units: defines if ``size`` and ``stride`` are in pixel or CRS units
+        """
+        super().__init__(dataset, roi)
+        self.roi = roi
+        self.size = _to_tuple(size)
+        self.stride = _to_tuple(stride)
+
+        if units == Units.PIXELS:
+            self.size = (self.size[0] * self.res, self.size[1] * self.res)
+            self.stride = (self.stride[0] * self.res, self.stride[1] * self.res)
+        self.chips = self.get_chips()
+
+    def get_chips(self) -> GeoDataFrame:
+        """Generate chips from the dataset.
+
+        Returns:
+            A GeoDataFrame containing the generated chips.
+        """
+        chips = []
+        rows, cols = tile_to_chips(self.roi, self.size, self.stride)
+
+
+        with mp.Pool(mp.cpu_count()) as pool:
+            results = list(tqdm(pool.imap(partial(get_chips_for_row, roi=self.roi, stride=self.stride, size=self.size, cols=cols), range(rows)), total=rows))
+            for result in results:
+                chips.extend(result)
+
+        if chips:
+            chips_gdf = GeoDataFrame(chips, crs=self.dataset.crs)
+            chips_gdf['fid'] = chips_gdf.index
         else:
             warnings.warn('Sampler has no chips, check your inputs')
             chips_gdf = GeoDataFrame()
