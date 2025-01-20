@@ -507,26 +507,24 @@ class GridGeoSampler(GeoSampler):
             chips_gdf = GeoDataFrame()
         return chips_gdf
 
-def get_chips_for_row(row, roi, stride, size, cols):
-    worker_chips = []
-    for j in range(cols):
-        minx = roi.minx + j * stride[1]
-        maxx = minx + size[1]
-        miny = roi.miny + row * stride[0]
-        maxy = miny + size[0]
-        mint = roi.mint
-        maxt = roi.maxt
-        chip = {
-            'geometry': box(minx, miny, maxx, maxy),
-            'minx': minx,
-            'miny': miny,
-            'maxx': maxx,
-            'maxy': maxy,
-            'mint': mint,
-            'maxt': maxt,
-        }
-        worker_chips.append(chip)
-    return worker_chips
+def get_chip(rowcol, roi, stride, size):
+    row, col = rowcol
+    minx = roi.minx + col * stride[1]
+    maxx = minx + size[1]
+    miny = roi.miny + row * stride[0]
+    maxy = miny + size[0]
+    mint = roi.mint
+    maxt = roi.maxt
+    chip = {
+        'geometry': box(minx, miny, maxx, maxy),
+        'minx': minx,
+        'miny': miny,
+        'maxx': maxx,
+        'maxy': maxy,
+        'mint': mint,
+        'maxt': maxt,
+    }
+    return chip
 
 class ROIGridSampler(GeoSampler):
     """ Samples elements in a grid-like fashion within a region of interest.
@@ -581,11 +579,17 @@ class ROIGridSampler(GeoSampler):
         chips = []
         rows, cols = tile_to_chips(self.roi, self.size, self.stride)
 
+        # # Sequential
+        # for row in tqdm(range(rows)):
+        #     for col in range(cols):
+        #         chip = get_chip((row, col, self.roi, self.stride, self.size))
+        #         chips.append(chip)
 
+        # Multiprocessing
         with mp.Pool(mp.cpu_count()) as pool:
-            results = list(tqdm(pool.imap(partial(get_chips_for_row, roi=self.roi, stride=self.stride, size=self.size, cols=cols), range(rows)), total=rows))
-            for result in results:
-                chips.extend(result)
+            chips = list(
+                    pool.map(partial(get_chip, roi=self.roi, stride=self.stride, size=self.size), tqdm([(row, col) for row in range(rows) for col in range(cols)]), chunksize=5000),
+            )
 
         if chips:
             chips_gdf = GeoDataFrame(chips, crs=self.dataset.crs)
