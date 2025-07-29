@@ -402,6 +402,7 @@ class RasterDataset(GeoDataset):
         bands: Sequence[str] | None = None,
         transforms: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
         cache: bool = True,
+        signing_function: Callable[[Path], Path] = lambda x: x,
     ) -> None:
         """Initialize a new RasterDataset instance.
 
@@ -427,6 +428,7 @@ class RasterDataset(GeoDataset):
         self.bands = bands or self.all_bands
         self.transforms = transforms
         self.cache = cache
+        self.signing_function = signing_function
 
         if self.all_bands:
             assert set(self.bands) <= set(self.all_bands)
@@ -440,7 +442,7 @@ class RasterDataset(GeoDataset):
             match = re.match(filename_regex, os.path.basename(filepath))
             if match is not None:
                 try:
-                    with rasterio.open(filepath) as src:
+                    with rasterio.open(self.signing_function(filepath)) as src:
                         # See if file has a color map
                         if len(self.cmap) == 0:
                             try:
@@ -611,7 +613,7 @@ class RasterDataset(GeoDataset):
         Returns:
             file handle of warped VRT
         """
-        src = rasterio.open(filepath)
+        src = rasterio.open(self.signing_function(filepath))
 
         # Only warp if necessary
         if src.crs != self.crs:
@@ -662,6 +664,8 @@ class VectorDataset(GeoDataset):
             'object_detection', 'semantic_segmentation', 'instance_segmentation'
         ] = 'semantic_segmentation',
         layer: str | int | None = None,
+        signing_function: Callable[[Path], Path] = lambda x: x,
+
     ) -> None:
         """Initialize a new VectorDataset instance.
 
@@ -696,6 +700,7 @@ class VectorDataset(GeoDataset):
         self.paths = paths
         self.transforms = transforms
         self.label_name = label_name
+        self.signing_function = signing_function
         # List of allowed tasks
         allowed_tasks = [
             'semantic_segmentation',
@@ -715,7 +720,7 @@ class VectorDataset(GeoDataset):
             match = re.match(filename_regex, os.path.basename(filepath))
             if match is not None:
                 try:
-                    with fiona.open(filepath, layer=layer) as src:
+                    with fiona.open(self.signing_function(filepath), layer=layer) as src:
                         if crs is None:
                             crs = CRS.from_wkt(src.crs_wkt)
 
