@@ -1,5 +1,5 @@
-Alternatives
-============
+Related Libraries
+=================
 
 TorchGeo is not the only **geospatial machine learning library** out there, there are a number of alternatives that you can consider using. The goal of this page is to provide an up-to-date listing of these libraries and the features they support in order to help you decide which library is right for you. Criteria for inclusion on this list include:
 
@@ -13,7 +13,7 @@ When deciding which library is most useful to you, it is worth considering the f
 
    Software is a living, breathing organism and is constantly undergoing change. If any of the above information is incorrect or out of date, or if you want to add a new project to this list, please open a PR!
 
-   *Last updated: 28 August 2024*
+   *Last updated: 31 March 2025*
 
 Features
 --------
@@ -26,7 +26,7 @@ Features
    :header-rows: 1
    :widths: auto
 
-\*Support for TensorFlow was dropped in Raster Vision 0.12.
+\*Support was dropped in newer releases.
 
 **ML Backend**: The machine learning libraries used by the project. For example, if you are a scikit-learn user, eo-learn may be perfect for you, but if you need more advanced deep learning support, you may want to choose a different library.
 
@@ -75,7 +75,7 @@ These are metrics that can be scraped from GitHub.
 
 **Commits**: The number of commits on the main development branch. This is another metric for how active development has been. However, this can vary a lot depending on whether PRs are merged with or without squashing first.
 
-**Core SLOCs**: The number of source lines of code in the core library, excluding empty lines and comments. This tells you how large the library is, and how long it would take someone to write something like it themselves. We use `scc <https://github.com/boyter/scc>`_ to compute SLOCs and exclude markdown languages from the count.
+**Core SLOCs**: The number of source lines of code in the core library, excluding empty lines and comments. This tells you how large the library is, and how long it would take someone to write something like it themselves. We use `scc <https://github.com/boyter/scc>`_ to compute SLOCs and exclude markup languages from the count.
 
 **Test SLOCs**: The number of source lines of code in the testing suite, excluding empty lines and comments. This tells you how well tested the project is. A good goal to strive for is a similar amount of code for testing as there is in the core library itself.
 
@@ -109,9 +109,13 @@ These are download metrics for the project. Note that these numbers can be artif
 .. _TorchGeo: https://github.com/microsoft/torchgeo
 .. _eo-learn: https://github.com/sentinel-hub/eo-learn
 .. _Raster Vision: https://github.com/azavea/raster-vision
-.. _PaddleRS: https://github.com/PaddlePaddle/PaddleRS
 .. _DeepForest: https://github.com/weecology/DeepForest
-.. _SITS: https://github.com/e-sensing/sits
-.. _segment-geospatial: https://github.com/opengeos/segment-geospatial
+.. _samgeo: https://github.com/opengeos/segment-geospatial
 .. _TerraTorch: https://github.com/IBM/terratorch
+.. _SITS: https://github.com/e-sensing/sits
+.. _srai: https://github.com/kraina-ai/srai
 .. _scikit-eo: https://github.com/yotarazona/scikit-eo
+.. _geo-bench: https://github.com/ServiceNow/geo-bench
+.. _GeoAI: https://github.com/opengeos/geoai
+.. _OTBTF: https://github.com/remicres/otbtf
+.. _GeoDeep: https://github.com/uav4geo/GeoDeep

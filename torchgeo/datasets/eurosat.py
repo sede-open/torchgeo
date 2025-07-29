@@ -15,7 +15,13 @@ from torch import Tensor
 
 from .errors import DatasetNotFoundError, RGBBandsMissingError
 from .geo import NonGeoClassificationDataset
-from .utils import Path, check_integrity, download_url, extract_archive, rasterio_loader
+from .utils import (
+    Path,
+    download_and_extract_archive,
+    download_url,
+    extract_archive,
+    rasterio_loader,
+)
 
 
 class EuroSAT(NonGeoClassificationDataset):
@@ -54,7 +60,7 @@ class EuroSAT(NonGeoClassificationDataset):
     * https://ieeexplore.ieee.org/document/8519248
     """
 
-    url = 'https://hf.co/datasets/torchgeo/eurosat/resolve/06fd1b090bceecc0ce724cd21578ba7a6664fe8d/EuroSATallBands.zip'
+    url = 'https://hf.co/datasets/torchgeo/eurosat/resolve/1ce6f1bfb56db63fd91b6ecc466ea67f2509774c/'
     filename = 'EuroSATallBands.zip'
     md5 = '5ac12b3b2557aa56e1826e981e8e200e'
 
@@ -64,10 +70,10 @@ class EuroSAT(NonGeoClassificationDataset):
     )
 
     splits = ('train', 'val', 'test')
-    split_urls: ClassVar[dict[str, str]] = {
-        'train': 'https://storage.googleapis.com/remote_sensing_representations/eurosat-train.txt',
-        'val': 'https://storage.googleapis.com/remote_sensing_representations/eurosat-val.txt',
-        'test': 'https://storage.googleapis.com/remote_sensing_representations/eurosat-test.txt',
+    split_filenames: ClassVar[dict[str, str]] = {
+        'train': 'eurosat-train.txt',
+        'val': 'eurosat-val.txt',
+        'test': 'eurosat-test.txt',
     }
     split_md5s: ClassVar[dict[str, str]] = {
         'train': '908f142e73d6acdf3f482c5e80d851b1',
@@ -84,11 +90,11 @@ class EuroSAT(NonGeoClassificationDataset):
         'B06',
         'B07',
         'B08',
-        'B8A',
         'B09',
         'B10',
         'B11',
         'B12',
+        'B8A',
     )
 
     rgb_bands = ('B04', 'B03', 'B02')
@@ -126,11 +132,12 @@ class EuroSAT(NonGeoClassificationDataset):
            The *bands* parameter.
         """
         self.root = root
+        self.split = split
         self.transforms = transforms
         self.download = download
         self.checksum = checksum
 
-        assert split in ['train', 'val', 'test']
+        assert self.split in {'train', 'val', 'test'}
 
         self._validate_bands(bands)
         self.bands = bands
@@ -141,7 +148,7 @@ class EuroSAT(NonGeoClassificationDataset):
         self._verify()
 
         valid_fns = set()
-        with open(os.path.join(self.root, f'eurosat-{split}.txt')) as f:
+        with open(os.path.join(self.root, self.split_filenames[split])) as f:
             for fn in f:
                 valid_fns.add(fn.strip().replace('.jpg', '.tif'))
 
@@ -173,57 +180,35 @@ class EuroSAT(NonGeoClassificationDataset):
 
         return sample
 
-    def _check_integrity(self) -> bool:
-        """Check integrity of dataset.
-
-        Returns:
-            True if dataset files are found and/or MD5s match, else False
-        """
-        integrity: bool = check_integrity(
-            os.path.join(self.root, self.filename), self.md5 if self.checksum else None
-        )
-        return integrity
-
     def _verify(self) -> None:
         """Verify the integrity of the dataset."""
-        # Check if the files already exist
-        filepath = os.path.join(self.root, self.base_dir)
-        if os.path.exists(filepath):
+        # Check split file
+        filename = os.path.join(self.root, self.split_filenames[self.split])
+        if not os.path.isfile(filename):
+            if self.download:
+                download_url(
+                    self.url + self.split_filenames[self.split],
+                    self.root,
+                    md5=self.split_md5s[self.split] if self.checksum else None,
+                )
+            else:
+                raise DatasetNotFoundError(self)
+
+        # Check image directory
+        directory = os.path.join(self.root, self.base_dir)
+        zipfile = os.path.join(self.root, self.filename)
+        if os.path.isdir(directory):
             return
-
-        # Check if zip file already exists (if so then extract)
-        if self._check_integrity():
-            self._extract()
-            return
-
-        # Check if the user requested to download the dataset
-        if not self.download:
-            raise DatasetNotFoundError(self)
-
-        # Download and extract the dataset
-        self._download()
-        self._extract()
-
-    def _download(self) -> None:
-        """Download the dataset."""
-        download_url(
-            self.url,
-            self.root,
-            filename=self.filename,
-            md5=self.md5 if self.checksum else None,
-        )
-        for split in self.splits:
-            download_url(
-                self.split_urls[split],
+        elif os.path.isfile(zipfile):
+            extract_archive(zipfile)
+        elif self.download:
+            download_and_extract_archive(
+                self.url + self.filename,
                 self.root,
-                filename=f'eurosat-{split}.txt',
-                md5=self.split_md5s[split] if self.checksum else None,
+                md5=self.md5 if self.checksum else None,
             )
-
-    def _extract(self) -> None:
-        """Extract the dataset."""
-        filepath = os.path.join(self.root, self.filename)
-        extract_archive(filepath)
+        else:
+            raise DatasetNotFoundError(self)
 
     def _validate_bands(self, bands: Sequence[str]) -> None:
         """Validate list of bands.
@@ -305,10 +290,10 @@ class EuroSATSpatial(EuroSAT):
     .. versionadded:: 0.6
     """
 
-    split_urls: ClassVar[dict[str, str]] = {
-        'train': 'https://hf.co/datasets/torchgeo/eurosat/resolve/1c11c73a87b40b0485d103231a97829991b8e22f/eurosat-spatial-train.txt',
-        'val': 'https://hf.co/datasets/torchgeo/eurosat/resolve/1c11c73a87b40b0485d103231a97829991b8e22f/eurosat-spatial-val.txt',
-        'test': 'https://hf.co/datasets/torchgeo/eurosat/resolve/1c11c73a87b40b0485d103231a97829991b8e22f/eurosat-spatial-test.txt',
+    split_filenames: ClassVar[dict[str, str]] = {
+        'train': 'eurosat-spatial-train.txt',
+        'val': 'eurosat-spatial-val.txt',
+        'test': 'eurosat-spatial-test.txt',
     }
     split_md5s: ClassVar[dict[str, str]] = {
         'train': '7be3254be39f23ce4d4d144290c93292',
@@ -328,14 +313,13 @@ class EuroSAT100(EuroSAT):
     .. versionadded:: 0.5
     """
 
-    url = 'https://hf.co/datasets/torchgeo/eurosat/resolve/06fd1b090bceecc0ce724cd21578ba7a6664fe8d/EuroSAT100.zip'
     filename = 'EuroSAT100.zip'
     md5 = 'c21c649ba747e86eda813407ef17d596'
 
-    split_urls: ClassVar[dict[str, str]] = {
-        'train': 'https://hf.co/datasets/torchgeo/eurosat/resolve/06fd1b090bceecc0ce724cd21578ba7a6664fe8d/eurosat-train.txt',
-        'val': 'https://hf.co/datasets/torchgeo/eurosat/resolve/06fd1b090bceecc0ce724cd21578ba7a6664fe8d/eurosat-val.txt',
-        'test': 'https://hf.co/datasets/torchgeo/eurosat/resolve/06fd1b090bceecc0ce724cd21578ba7a6664fe8d/eurosat-test.txt',
+    split_filenames: ClassVar[dict[str, str]] = {
+        'train': 'eurosat-100-train.txt',
+        'val': 'eurosat-100-val.txt',
+        'test': 'eurosat-100-test.txt',
     }
     split_md5s: ClassVar[dict[str, str]] = {
         'train': '033d0c23e3a75e3fa79618b0e35fe1c7',

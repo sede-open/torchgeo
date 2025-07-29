@@ -26,6 +26,11 @@ L8 Biome
 
 .. autoclass:: L8BiomeDataModule
 
+MMFlood
+^^^^^^^^
+
+.. autoclass:: MMFloodDataModule
+
 NAIP
 ^^^^
 
@@ -124,6 +129,11 @@ GID-15
 
 .. autoclass:: GID15DataModule
 
+HySpecNet-11k
+^^^^^^^^^^^^^
+
+.. autoclass:: HySpecNet11kDataModule
+
 Inria Aerial Image Labeling
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -160,6 +170,11 @@ OSCD
 
 .. autoclass:: OSCDDataModule
 
+PatternNet
+^^^^^^^^^^
+
+.. autoclass:: PatternNetDataModule
+
 Potsdam
 ^^^^^^^
 
@@ -169,6 +184,11 @@ QuakeSet
 ^^^^^^^^
 
 .. autoclass:: QuakeSetDataModule
+
+ReforesTree
+^^^^^^^^^^^
+
+.. autoclass:: ReforesTreeDataModule
 
 RESISC45
 ^^^^^^^^
@@ -185,10 +205,20 @@ SEN12MS
 
 .. autoclass:: SEN12MSDataModule
 
+SKIPP'D
+^^^^^^^
+
+.. autoclass:: SKIPPDDataModule
+
 So2Sat
 ^^^^^^
 
 .. autoclass:: So2SatDataModule
+
+Solar Plants Brazil
+^^^^^^^^^^^^^^^^^^^
+
+.. autoclass:: SolarPlantsBrazilDataModule
 
 SpaceNet
 ^^^^^^^^
@@ -208,10 +238,20 @@ SSL4EO-L Benchmark
 
 .. autoclass:: SSL4EOLBenchmarkDataModule
 
+Substation
+^^^^^^^^^^
+
+.. autoclass:: SubstationDataModule
+
 SustainBench Crop Yield
 ^^^^^^^^^^^^^^^^^^^^^^^
 
 .. autoclass:: SustainBenchCropYieldDataModule
+
+TreeSatAI
+^^^^^^^^^
+
+.. autoclass:: TreeSatAIDataModule
 
 Tropical Cyclone
 ^^^^^^^^^^^^^^^^
@@ -232,6 +272,11 @@ Vaihingen
 ^^^^^^^^^
 
 .. autoclass:: Vaihingen2DDataModule
+
+VHR-10
+^^^^^^
+
+.. autoclass:: VHR10DataModule
 
 xView2
 ^^^^^^

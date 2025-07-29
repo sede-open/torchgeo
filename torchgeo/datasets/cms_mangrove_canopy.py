@@ -9,7 +9,7 @@ from typing import Any
 
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
-from rasterio.crs import CRS
+from pyproj import CRS
 
 from .errors import DatasetNotFoundError
 from .geo import RasterDataset
@@ -171,7 +171,7 @@ class CMSGlobalMangroveCanopy(RasterDataset):
         self,
         paths: Path | list[Path] = 'data',
         crs: CRS | None = None,
-        res: float | None = None,
+        res: float | tuple[float, float] | None = None,
         measurement: str = 'agb',
         country: str = all_countries[0],
         transforms: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
@@ -184,7 +184,8 @@ class CMSGlobalMangroveCanopy(RasterDataset):
             paths: one or more root directories to search or files to load
             crs: :term:`coordinate reference system (CRS)` to warp to
                 (defaults to the CRS of the first file found)
-            res: resolution of the dataset in units of CRS
+            res: resolution of the dataset in units of CRS in (xres, yres) format. If a
+                single float is provided, it is used for both the x and y resolution.
                 (defaults to the resolution of the first file found)
             measurement: which of the three measurements, 'agb', 'hba95', or 'hmax95'
             country: country for which to retrieve data
@@ -204,15 +205,15 @@ class CMSGlobalMangroveCanopy(RasterDataset):
         self.checksum = checksum
 
         assert isinstance(country, str), 'Country argument must be a str.'
-        assert (
-            country in self.all_countries
-        ), f'You have selected an invalid country, please choose one of {self.all_countries}'
+        assert country in self.all_countries, (
+            f'You have selected an invalid country, please choose one of {self.all_countries}'
+        )
         self.country = country
 
         assert isinstance(measurement, str), 'Measurement must be a string.'
-        assert (
-            measurement in self.measurements
-        ), f'You have entered an invalid measurement, please choose one of {self.measurements}.'
+        assert measurement in self.measurements, (
+            f'You have entered an invalid measurement, please choose one of {self.measurements}.'
+        )
         self.measurement = measurement
 
         self.filename_glob = f'**/Mangrove_{self.measurement}_{self.country}*'

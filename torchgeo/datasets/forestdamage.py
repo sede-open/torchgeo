@@ -146,7 +146,7 @@ class ForestDamage(NonGeoDataset):
 
         boxes, labels = self._load_target(parsed['bboxes'], parsed['labels'])
 
-        sample = {'image': image, 'boxes': boxes, 'label': labels}
+        sample = {'image': image, 'bbox_xyxy': boxes, 'label': labels}
 
         if self.transforms is not None:
             sample = self.transforms(sample)
@@ -217,16 +217,12 @@ class ForestDamage(NonGeoDataset):
         return boxes, labels
 
     def _verify(self) -> None:
-        """Checks the integrity of the dataset structure.
-
-        Returns:
-            True if the dataset directories are found, else False
-        """
+        """Verify the integrity of the dataset."""
         filepath = os.path.join(self.root, self.data_dir)
         if os.path.isdir(filepath):
             return
 
-        filepath = os.path.join(self.root, self.data_dir + '.zip')
+        filepath = os.path.join(self.root, f'{self.data_dir}.zip')
         if os.path.isfile(filepath):
             if self.checksum and not check_integrity(filepath, self.md5):
                 raise RuntimeError('Dataset found, but corrupted.')
@@ -268,7 +264,7 @@ class ForestDamage(NonGeoDataset):
         image = sample['image'].permute((1, 2, 0)).numpy()
 
         ncols = 1
-        showing_predictions = 'prediction_boxes' in sample
+        showing_predictions = 'prediction_bbox_xyxy' in sample
         if showing_predictions:
             ncols += 1
 
@@ -288,7 +284,7 @@ class ForestDamage(NonGeoDataset):
                 edgecolor='r',
                 facecolor='none',
             )
-            for bbox in sample['boxes'].numpy()
+            for bbox in sample['bbox_xyxy'].numpy()
         ]
         for bbox in bboxes:
             axs[0].add_patch(bbox)
@@ -309,7 +305,7 @@ class ForestDamage(NonGeoDataset):
                     edgecolor='r',
                     facecolor='none',
                 )
-                for bbox in sample['prediction_boxes'].numpy()
+                for bbox in sample['prediction_bbox_xyxy'].numpy()
             ]
             for bbox in pred_bboxes:
                 axs[1].add_patch(bbox)

@@ -32,34 +32,10 @@ class TestEuroSAT:
     ) -> EuroSAT:
         base_class: type[EuroSAT] = request.param[0]
         split: str = request.param[1]
-        md5 = 'aa051207b0547daba0ac6af57808d68e'
-        monkeypatch.setattr(base_class, 'md5', md5)
-        url = os.path.join('tests', 'data', 'eurosat', 'EuroSATallBands.zip')
+        url = os.path.join('tests', 'data', 'eurosat') + os.sep
         monkeypatch.setattr(base_class, 'url', url)
-        monkeypatch.setattr(base_class, 'filename', 'EuroSATallBands.zip')
-        monkeypatch.setattr(
-            base_class,
-            'split_urls',
-            {
-                'train': os.path.join('tests', 'data', 'eurosat', 'eurosat-train.txt'),
-                'val': os.path.join('tests', 'data', 'eurosat', 'eurosat-val.txt'),
-                'test': os.path.join('tests', 'data', 'eurosat', 'eurosat-test.txt'),
-            },
-        )
-        monkeypatch.setattr(
-            base_class,
-            'split_md5s',
-            {
-                'train': '4af60a00fdfdf8500572ae5360694b71',
-                'val': '4af60a00fdfdf8500572ae5360694b71',
-                'test': '4af60a00fdfdf8500572ae5360694b71',
-            },
-        )
-        root = tmp_path
         transforms = nn.Identity()
-        return base_class(
-            root=root, split=split, transforms=transforms, download=True, checksum=True
-        )
+        return base_class(tmp_path, split=split, transforms=transforms, download=True)
 
     def test_getitem(self, dataset: EuroSAT) -> None:
         x = dataset[0]
@@ -84,18 +60,42 @@ class TestEuroSAT:
         assert len(ds) == 4
 
     def test_already_downloaded(self, dataset: EuroSAT, tmp_path: Path) -> None:
-        EuroSAT(root=tmp_path, download=True)
+        type(dataset)(tmp_path, split=dataset.split)
 
     def test_already_downloaded_not_extracted(
         self, dataset: EuroSAT, tmp_path: Path
     ) -> None:
         shutil.rmtree(dataset.root)
-        shutil.copy(dataset.url, tmp_path)
-        EuroSAT(root=tmp_path, download=False)
+        shutil.copy(dataset.url + dataset.filename, tmp_path)
+        type(dataset)(tmp_path, split=dataset.split)
 
     def test_not_downloaded(self, tmp_path: Path) -> None:
         with pytest.raises(DatasetNotFoundError, match='Dataset not found'):
             EuroSAT(tmp_path)
+
+    def test_missing_images_and_zip_no_download(self, tmp_path: Path) -> None:
+        """Ensure DatasetNotFoundError is raised if images and zip are missing and download=False."""
+        split_file = tmp_path / 'eurosat-train.txt'
+        split_file.write_text('dummy.tif\n')
+        with pytest.raises(DatasetNotFoundError):
+            EuroSAT(root=tmp_path, split='train', download=False)
+
+    def test_image_folder_present_split_file_missing(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
+        """Test that split file is downloaded if missing but image folder is present."""
+
+        image_dir = tmp_path / EuroSAT.base_dir
+        class_dir = image_dir / 'AnnualCrop'
+        class_dir.mkdir(parents=True, exist_ok=True)
+        (class_dir / 'AnnualCrop_1.tif').touch()
+        split_file = tmp_path / 'eurosat-train.txt'
+        assert not split_file.exists()
+        monkeypatch.setattr(
+            EuroSAT, 'url', os.path.join('tests', 'data', 'eurosat') + os.sep
+        )
+        EuroSAT(root=tmp_path, split='train', download=True)
+        assert split_file.exists()
 
     def test_plot(self, dataset: EuroSAT) -> None:
         x = dataset[0].copy()
@@ -108,7 +108,7 @@ class TestEuroSAT:
         plt.close()
 
     def test_plot_rgb(self, dataset: EuroSAT, tmp_path: Path) -> None:
-        dataset = EuroSAT(root=tmp_path, bands=('B03',))
+        dataset = type(dataset)(tmp_path, split=dataset.split, bands=('B03',))
         with pytest.raises(
             RGBBandsMissingError, match='Dataset does not contain some of the RGB bands'
         ):

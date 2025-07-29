@@ -47,13 +47,16 @@ class BioMassters(NonGeoDataset):
 
     * https://nascetti-a.github.io/BioMasster/
 
+    .. note::
+        This dataset can be downloaded from `Torchgeo Hugging Face Hub <https://hf.co/datasets/torchgeo/biomassters>`_.
+
     .. versionadded:: 0.5
     """
 
     valid_splits = ('train', 'test')
     valid_sensors = ('S1', 'S2')
 
-    metadata_filename = 'The_BioMassters_-_features_metadata.csv.csv'
+    metadata_filename = 'biomassters_features_metadata.csv'
 
     def __init__(
         self,
@@ -81,14 +84,14 @@ class BioMassters(NonGeoDataset):
         """
         self.root = root
 
-        assert (
-            split in self.valid_splits
-        ), f'Please choose one of the valid splits: {self.valid_splits}.'
+        assert split in self.valid_splits, (
+            f'Please choose one of the valid splits: {self.valid_splits}.'
+        )
         self.split = split
 
-        assert set(sensors).issubset(
-            set(self.valid_sensors)
-        ), f'Please choose a subset of valid sensors: {self.valid_sensors}.'
+        assert set(sensors).issubset(set(self.valid_sensors)), (
+            f'Please choose a subset of valid sensors: {self.valid_sensors}.'
+        )
         self.sensors = sensors
         self.as_time_series = as_time_series
 
