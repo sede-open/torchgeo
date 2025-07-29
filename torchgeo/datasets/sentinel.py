@@ -338,6 +338,7 @@ class Sentinel2(Sentinel):
         bands: Sequence[str] | None = None,
         transforms: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
         cache: bool = True,
+        signing_function: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
     ) -> None:
         """Initialize a new Dataset instance.
 
@@ -366,7 +367,7 @@ class Sentinel2(Sentinel):
             res = (res, res)
 
         self.filename_regex = self.filename_regex.format(int(res[0]))
-        super().__init__(paths, crs, res, bands, transforms, cache)
+        super().__init__(paths, crs, res, bands, transforms, cache, signing_function)
 
     def plot(
         self,
