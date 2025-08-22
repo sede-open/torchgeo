@@ -553,7 +553,7 @@ class ROIGridSampler(GeoSampler):
         dataset: GeoDataset,
         size: tuple[float, float] | float,
         stride: tuple[float, float] | float,
-        roi: BoundingBox | None = None,
+        roi: BoundingBox | list = None,
         units: Units = Units.PIXELS,
     ) -> None:
         """Initialize a new Sampler instance.
@@ -576,6 +576,8 @@ class ROIGridSampler(GeoSampler):
                 (defaults to the bounds of ``dataset.index``)
             units: defines if ``size`` and ``stride`` are in pixel or CRS units
         """
+        if isinstance(roi, list):
+            roi = BoundingBox(roi[0], roi[2], roi[1], roi[3], dataset.bounds.mint, dataset.bounds.maxt)
         super().__init__(dataset, roi)
         self.roi = roi
         self.size = _to_tuple(size)
