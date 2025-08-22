@@ -25,11 +25,12 @@ from .utils import _to_tuple, get_random_bounding_box, tile_to_chips
 import pandas as pd
 import re
 
-def load_file(path: str | GeoDataFrame) -> GeoDataFrame:
+def load_file(path: str, bbox: GeoDataFrame) -> GeoDataFrame:
     """Load a file from the given path.
 
     Parameters:
-    path (str or GeoDataFrame): The path to the file or a GeoDataFrame object.
+    path (str): The path to the file.
+    bbox (GeoDataFrame): The bounding box passed to geopandas to filter the data while opening.
 
     Returns:
     GeoDataFrame: The loaded file as a GeoDataFrame.
@@ -42,10 +43,17 @@ def load_file(path: str | GeoDataFrame) -> GeoDataFrame:
         return path
     if path.endswith('.feather'):
         print(f'Reading feather file: {path}')
-        return gpd.read_feather(path)
+        gdf = gpd.read_feather(path)
+        if bbox is not None:
+            gdf = gdf.cx[bbox.minx : bbox.maxx, bbox.miny : bbox.maxy]
+    elif path.endswith('.parquet'):
+        print(f'Reading parquet file: {path}')
+        gdf = gpd.read_parquet(path, bbox=bbox)
     else:
         print(f'Reading shapefile: {path}')
-        return gpd.read_file(path)
+        gdf = gpd.read_file(path, bbox=bbox)
+    return gdf
+
 
 
 
@@ -150,6 +158,7 @@ class GeoSampler(Sampler[BoundingBox], abc.ABC):
     def filter_chips(
         self,
         filter_by: str | GeoDataFrame,
+        bbox: GeoDataFrame = None,
         predicate: str = 'intersects',
         action: str = 'keep',
     ) -> None:
@@ -162,7 +171,14 @@ class GeoSampler(Sampler[BoundingBox], abc.ABC):
                     Can either be ``'drop'`` or ``'keep'``.
         """
         prefilter_leng = len(self.chips)
-        filtering_gdf = load_file(filter_by).to_crs(self.dataset.crs)
+        if not isinstance(filter_by, GeoDataFrame):
+            filtering_gdf = load_file(filter_by, bbox).to_crs(self.dataset.crs)
+        else:
+            filtering_gdf = filter_by
+            if bbox is not None:
+                filtering_gdf = filtering_gdf.cx[
+                    bbox.minx : bbox.maxx, bbox.miny : bbox.maxy
+            ]
 
         if action == 'keep':
             self.chips = self.chips.iloc[
