@@ -203,7 +203,8 @@ class GeoSampler(Sampler[BoundingBox], abc.ABC):
 
         self.chips.fid = self.chips.index
         print(f'Filter step reduced chips from {prefilter_leng} to {len(self.chips)}')
-        assert not self.chips.empty, 'No chips left after filtering!'
+        if self.chips.empty:
+            logging.warning('No chips left after filtering!')
 
     def set_worker_split(self, total_workers: int, worker_num: int) -> None:
         """Split the chips for multi-worker inference.
